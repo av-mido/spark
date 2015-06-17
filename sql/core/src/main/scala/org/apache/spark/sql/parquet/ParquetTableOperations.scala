@@ -352,12 +352,19 @@ private[sql] case class InsertIntoParquetTable(
       committer.setupTask(hadoopContext)
       val writer = format.getRecordWriter(hadoopContext)
       try {
-        while (iter.hasNext) {
-          val row = iter.next()
-          writer.write(null, row)
+        hadoopContext.getConfiguration().set("mapreduce.parquetoutputformat.workpath", format.getDefaultWorkFile(hadoopContext, ".parquet").toString)
+        try {
+          while (iter.hasNext) {
+            val row = iter.next()
+            writer.write(null, row)
+          }
+        } finally {
+          writer.close(hadoopContext)
         }
-      } finally {
-        writer.close(hadoopContext)
+      } catch {
+        case e: Exception =>
+          committer.abortTask(hadoopContext)
+          throw e
       }
       SparkHadoopMapRedUtil.commitTask(committer, hadoopContext, context)
       1

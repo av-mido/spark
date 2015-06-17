@@ -30,7 +30,15 @@ private[parquet] class DirectParquetOutputCommitter(outputPath: Path, context: T
   val LOG = Log.getLog(classOf[ParquetOutputCommitter])
 
   override def getWorkPath(): Path = outputPath
-  override def abortTask(taskContext: TaskAttemptContext): Unit = {}
+  override def abortTask(taskContext: TaskAttemptContext): Unit = {
+    val workPath = new Path(taskContext.getConfiguration().get("mapreduce.parquetoutputformat.workpath"))
+    if (workPath != null) {
+      val fs = workPath.getFileSystem(context.getConfiguration());
+      if (!fs.delete(workPath, true)) {
+        LOG.warn("Could not delete " + workPath);
+      }
+    }
+  }
   override def commitTask(taskContext: TaskAttemptContext): Unit = {}
   override def needsTaskCommit(taskContext: TaskAttemptContext): Boolean = true
   override def setupJob(jobContext: JobContext): Unit = {}
