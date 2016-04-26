@@ -82,16 +82,46 @@ private[deploy] class ExecutorRunner(
     var exitCode: Option[Int] = None
     if (process != null) {
       logInfo("Killing process!")
+      process.destroy()
+      var exited = waitForProcess(5 * 60 * 1000)
+      logInfo("Killing process! returned " + exited)
+      if (!exited) {
+        try {
+          Runtime.getRuntime().exec("pkill -f " + appId)
+        } catch {
+          case e: Exception => {
+            logInfo("Error in pkill")
+            logInfo(e.toString())
+          }
+        }
+      }
       if (stdoutAppender != null) {
         stdoutAppender.stop()
       }
       if (stderrAppender != null) {
         stderrAppender.stop()
       }
-      process.destroy()
-      exitCode = Some(process.waitFor())
     }
     worker ! ExecutorStateChanged(appId, execId, state, message, exitCode)
+  }
+
+  private def waitForProcess(timeoutMs: Long): Boolean = {
+    var terminated = false
+    val startTime = System.currentTimeMillis
+    while (!terminated) {
+      try {
+        process.exitValue()
+        terminated = true
+      } catch {
+        case e: IllegalThreadStateException =>
+          // Process not terminated yet
+          if (System.currentTimeMillis - startTime > timeoutMs) {
+            return false
+          }
+          Thread.sleep(100)
+      }
+    }
+    true
   }
 
   /** Stop this executor runner, including killing the process it launched */
